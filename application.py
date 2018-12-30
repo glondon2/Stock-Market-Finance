@@ -5,9 +5,10 @@
 #   This is my implementation of a web application that simulates stock market functionality by allowing 
 #   to obtain quotes on stocks and simulate buying and selling stocks by being given an inital capital of $10,000 (CS50 PSET 7).
 
-from cs50 import SQL
+from SQL import SQL
 from flask import Flask, flash, redirect, render_template, request, session, url_for
 from flask_session import Session
+import urllib
 from passlib.apps import custom_app_context as pwd_context
 from tempfile import gettempdir
 
@@ -35,7 +36,7 @@ app.config["SESSION_TYPE"] = "filesystem"
 Session(app)
 
 # configure CS50 Library to use SQLite database
-db = SQL("sqlite:///finance.db")
+db = SQL('sqlite:///finance.db')
 
 
 @app.route("/")
@@ -52,12 +53,12 @@ def index():
     for i in range (len(sy)):
         symbol.append(sy[i]["symbol"].upper())
     for i in range (len(sh)):
-        share.append(sh[i]["shares"])  
+        share.append(str(sh[i]["shares"]))  
     for i in range (len(pr)):
         price.append(pr[i]["price"])
     # templates=dict(symbols=symbol,shares=share,prices=price)
     for i in range(len(symbol)):
-        total.append(price[i]*share[i])
+        total.append(float(price[i])*float(share[i]))
     data = zip(symbol,share,price,total)
     sum = 0.0
     for i in range(len(total)):
@@ -65,7 +66,6 @@ def index():
     for i in range(len(total)):
         total[i]=usd(total[i])
     rows = db.execute("SELECT cash FROM users WHERE id=:id", id= session['user_id'])
-    # cash = float("{:.2f}".format(rows[0]["cash"]))
     sum+=rows[0]["cash"]
     return render_template("index.html", data=data, sum=usd(sum), cash=usd(rows[0]["cash"]))
     
@@ -81,13 +81,15 @@ def buy():
         if not amount.isdigit() or (int(amount))%1!=0 or (int(amount))<=0:
             return apology("invalid shares")
         rows = db.execute("SELECT cash FROM users WHERE id=:id", id= session['user_id'])
-        if rows[0]["cash"] > float(amount)*stock["price"]:
+        if rows[0]["cash"] > float(amount)*float(stock["price"]):
             unique = db.execute("INSERT INTO portfolio (id, symbol, shares, price) VALUES(:id, :symbol, :shares, :price)", id= session['user_id'], symbol=request.form.get("symbol"), shares=request.form.get("shares"), price=stock["price"])
             db.execute("INSERT INTO history (id, symbol, shares, price) VALUES(:id, :symbol, :shares, :price)", id= session['user_id'], symbol=request.form.get("symbol"), shares=request.form.get("shares"), price=stock["price"])
             if not unique:
                 temp = db.execute("SELECT shares FROM portfolio WHERE id=:id AND symbol=:symbol", id= session['user_id'], symbol=request.form.get("symbol"))
                 db.execute("UPDATE 'portfolio' SET shares=:shares WHERE id=:id AND symbol=:symbol", shares=temp[0]["shares"]+int(request.form.get("shares")), id=session['user_id'], symbol=request.form.get("symbol"))
-            db.execute("UPDATE 'users' SET cash=:cash WHERE id=:id", cash=(rows[0]["cash"])-(float(amount)*stock["price"]), id= session['user_id']) 
+            db.execute("UPDATE 'users' SET cash=:cash WHERE id=:id", cash=(rows[0]["cash"])-(float(amount)*float(stock["price"])), id= session['user_id']) 
+        else:
+            return apology("Too little $")
         return redirect(url_for("index"))
         
     else:
@@ -200,7 +202,7 @@ def register():
         if request.form.get("password")!=request.form.get("password2"):
              return apology("passwords do not match")
         
-        hash = pwd_context.encrypt(request.form.get("password"))
+        hash = pwd_context.hash(request.form.get("password"))
         
         result = db.execute("INSERT INTO users (username, hash) VALUES(:username, :hash)", username=request.form.get("username"), hash=hash)
         if not result:
@@ -232,7 +234,7 @@ def sell():
         else:
             db.execute("UPDATE 'portfolio' SET shares=:shares WHERE id=:id AND symbol=:symbol", shares=sy[0]["shares"]-int(request.form.get("shares")), id=session['user_id'], symbol=request.form.get("symbol"))
         db.execute("INSERT INTO history (id, symbol, shares, price) VALUES(:id, :symbol, :shares, :price)", id= session['user_id'], symbol=request.form.get("symbol"), shares=-int(request.form.get("shares")), price=stock["price"])
-        profit = stock["price"]*int(amount)
+        profit = float(stock["price"])*float(amount)
         temp = db.execute("SELECT cash FROM users WHERE id=:id",id= session['user_id'])
         db.execute("UPDATE 'users' SET cash=:cash WHERE id=:id", cash=temp[0]["cash"]+profit, id= session['user_id'])
         return redirect(url_for("index"))
@@ -267,7 +269,7 @@ def changepass():
         if request.form.get("newpass")!=request.form.get("newpass2"):
              return apology("your new passwords do not match")
         
-        hashed = pwd_context.encrypt(request.form.get("newpass"))
+        hashed = pwd_context.hash(request.form.get("newpass"))
         
         db.execute("UPDATE 'users' SET hash=:hash WHERE id=:id", hash=hashed, id= session['user_id'])
         

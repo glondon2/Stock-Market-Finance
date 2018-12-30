@@ -24,7 +24,7 @@
     {% for row in data %}
     <tr>
     {% for item in row %}
-    {% if item is not string and item>20%}
+    {% if item is not string %}
         <td>${{ item }}</td>
     {% else %}
         <td>{{ item }}</td>
